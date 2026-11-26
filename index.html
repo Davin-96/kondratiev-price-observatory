@@ -115,11 +115,30 @@ tr:hover td{background:var(--muted);}
 .fs-timebar .date-row{order:1;}
 .fs-timebar .quick{order:2;margin-top:0;}
 .fs-timebar .fs-lbl{font-size:12px;color:var(--muted-foreground);font-weight:500;}
-#chartCard:fullscreen,.chart-card-fs{width:100vw;height:100vh;padding:14px 18px;display:flex;flex-direction:column;margin:0;border-radius:0;background:var(--card);}
+#chartCard:fullscreen,.chart-card-fs{position:relative;width:100vw;height:100vh;padding:6px 8px;
+  display:flex;flex-direction:column;margin:0;border-radius:0;background:var(--card);overflow:hidden;}
 .chart-card-fs{position:fixed;inset:0;z-index:9999;}
-#chartCard:fullscreen .fs-timebar,.chart-card-fs .fs-timebar{display:flex;flex:none;}
+#chartCard:fullscreen .card-title,#chartCard:fullscreen .fs-timebar,#chartCard:fullscreen .legend-note,
+.chart-card-fs .card-title,.chart-card-fs .fs-timebar,.chart-card-fs .legend-note{display:none;}
 #chartCard:fullscreen .chart-wrap,.chart-card-fs .chart-wrap{flex:1;min-height:0;height:auto;}
-#chartCard:fullscreen .legend-note,.chart-card-fs .legend-note{flex:none;}
+.fs-tools{display:none;position:absolute;top:8px;right:10px;z-index:40;gap:6px;align-items:center;}
+#chartCard:fullscreen .fs-tools,.chart-card-fs .fs-tools{display:flex;}
+.fs-tools button{padding:5px 10px;font-size:12px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);}
+.fs-range{font-size:11px;color:var(--muted-foreground);background:var(--card);border:1px solid var(--border);
+  border-radius:999px;padding:4px 9px;box-shadow:var(--shadow);white-space:nowrap;}
+.fs-scrim{display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.16);}
+.fs-drawer{display:none;position:absolute;top:0;right:0;bottom:0;width:min(440px,94vw);z-index:35;
+  background:var(--card);border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(0,0,0,.18);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 28px;}
+#chartCard.fs-open .fs-tools{display:flex;}
+#chartCard.fs-open .fs-scrim{display:block;}
+#chartCard.fs-open .fs-drawer{display:block;}
+.fs-drawer .card{margin:0;padding:0;border:0;box-shadow:none;background:transparent;}
+.fs-drawer .card-title{font-size:14px;margin-bottom:12px;}
+.fs-drawer .ctrl-grid{grid-template-columns:1fr;gap:14px;}
+.fs-drawer .ctrl-block+.ctrl-block{margin-top:14px;}
+.fs-drawer .date-row input[type=date]{flex:1;min-width:0;font-size:12px;padding:5px 6px;}
+.fs-drawer .seg button{font-size:12px;padding:6px 7px;}
 .fs-hint{display:none;}
 @media(max-width:900px){.ctrl-grid{grid-template-columns:1fr;}}
 @media(max-width:768px){
@@ -147,7 +166,8 @@ tr:hover td{background:var(--muted);}
   </div>
   <div class="statusbar" id="status"><span class="pulse"></span><span>数据加载中…</span></div>
 
-  <div class="card">
+  <span id="controlHome" hidden></span>
+  <div class="card" id="controlCard">
     <div class="card-title">观测控制</div>
     <div class="ctrl-grid">
       <div class="ctrl-cell">
@@ -218,6 +238,13 @@ tr:hover td{background:var(--muted);}
 
   <div class="card" id="chartCard">
     <div class="card-title">价格曲线 <span class="hint">点击图表可固定竖向虚线，手机全屏建议横屏</span><button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
+    <div class="fs-tools" id="fsTools">
+      <span class="fs-range" id="fsRangeTag"></span>
+      <button id="fsSettingsBtn" aria-label="打开观测设置">⚙ 设置</button>
+      <button id="fsExitBtn" aria-label="退出全屏">⛶ 退出</button>
+    </div>
+    <div class="fs-scrim" id="fsScrim"></div>
+    <div class="fs-drawer" id="fsDrawer"><div id="fsDrawerBody"></div></div>
     <div class="fs-timebar" id="fsTimebar">
       <span class="fs-lbl">时间范围</span>
       <div class="date-row">
@@ -562,6 +589,8 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
     ['dateStart','fsDateStart'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=state.start;});
     ['dateEnd','fsDateEnd'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=state.end;});
     document.getElementById('sliderLabel').textContent=state.start.slice(0,4)+' — '+state.end.slice(0,4);
+    var tag=document.getElementById('fsRangeTag');
+    if(tag) tag.textContent=state.start.slice(0,4)+' — '+state.end.slice(0,4);
   }
 
   var hover={ x:null, y:null, inChart:false, event:null };
@@ -963,19 +992,37 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
       document.getElementById('status').innerHTML='<span class="pulse"></span><span>已清除能源 API key</span>';
     };
     var fullBtn=document.getElementById('fullBtn'),card=document.getElementById('chartCard');
+    var controlCard=document.getElementById('controlCard'),controlHome=document.getElementById('controlHome');
+    var drawerBody=document.getElementById('fsDrawerBody'),scrim=document.getElementById('fsScrim');
+    var fsActive=false;
+    function isFullscreen(){return document.fullscreenElement===card||card.classList.contains('chart-card-fs');}
+    function closeDrawer(){card.classList.remove('fs-open');}
+    function syncFullscreenUi(){
+      var now=isFullscreen();
+      if(now===fsActive) return;
+      fsActive=now;
+      if(now){
+        drawerBody.appendChild(controlCard);
+        closeDrawer();
+      }else{
+        closeDrawer();
+        controlHome.parentNode.insertBefore(controlCard,controlHome.nextSibling);
+      }
+    }
     function lockLandscape(){
       try{ if(window.screen&&screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
     }
     function afterFullscreen(){
-      fullBtn.textContent=(document.fullscreenElement||card.classList.contains('chart-card-fs'))?'⛶ 退出全屏':'⛶ 全屏';
+      syncFullscreenUi();
+      fullBtn.textContent=isFullscreen()?'⛶ 退出全屏':'⛶ 全屏';
       setTimeout(function(){render();syncDateUI();},120);
     }
     fullBtn.onclick=function(){
-      if(document.fullscreenElement||card.classList.contains('chart-card-fs')){
+      if(isFullscreen()){
         if(document.fullscreenElement) document.exitFullscreen().catch(function(){});
         card.classList.remove('chart-card-fs');
         try{ if(window.screen&&screen.orientation&&screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
-        fullBtn.textContent='⛶ 全屏';setTimeout(function(){render();syncDateUI();},120);
+        afterFullscreen();
       } else {
         lockLandscape();
         if(card.requestFullscreen){
@@ -986,6 +1033,14 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
         fullBtn.textContent='⛶ 退出全屏';
       }
     };
+    document.getElementById('fsExitBtn').onclick=function(){fullBtn.click();};
+    document.getElementById('fsSettingsBtn').onclick=function(){
+      if(!isFullscreen()) return;
+      var open=!card.classList.contains('fs-open');
+      card.classList.toggle('fs-open',open);
+      if(open) setTimeout(function(){render();syncDateUI();},60);
+    };
+    scrim.onclick=closeDrawer;
     document.addEventListener('fullscreenchange',afterFullscreen);
     window.addEventListener('orientationchange',function(){setTimeout(function(){render();syncDateUI();},200);});
     window.addEventListener('resize',function(){render();});
