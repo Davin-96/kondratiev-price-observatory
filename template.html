@@ -125,6 +125,11 @@ tr:hover td{background:var(--muted);}
 .fs-tools{display:none;position:absolute;top:8px;right:10px;z-index:40;gap:6px;align-items:center;}
 #chartCard:fullscreen .fs-tools,.chart-card-fs .fs-tools{display:flex;}
 .fs-tools button{padding:5px 10px;font-size:12px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);}
+.fs-rotate-note{display:none;position:absolute;left:50%;top:50%;z-index:45;
+  transform:translate(-50%,-50%);background:rgba(9,9,11,.88);color:#fff;
+  padding:14px 20px;border-radius:12px;font-size:14px;text-align:center;line-height:1.6;
+  max-width:80%;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.3);}
+#chartCard.fs-rotated .fs-rotate-note{transform:translate(-50%,-50%) rotate(-90deg);}
 .fs-range{font-size:11px;color:var(--muted-foreground);background:var(--card);border:1px solid var(--border);
   border-radius:999px;padding:4px 9px;box-shadow:var(--shadow);white-space:nowrap;}
 .fs-scrim{display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.16);}
@@ -167,6 +172,7 @@ tr:hover td{background:var(--muted);}
     <div class="head-actions">
       <button class="ghost" id="themeBtn" title="切换亮暗">◐ 主题</button>
       <button class="ghost" id="refreshBtn" title="拉取实时数据">↻ 刷新实时数据</button>
+      <button class="ghost" id="forceLandscapeBtn" title="尝试锁定横屏">⟳ 强制横屏</button>
     </div>
   </div>
   <div class="statusbar" id="status"><span class="pulse"></span><span>数据加载中…</span></div>
@@ -245,6 +251,7 @@ tr:hover td{background:var(--muted);}
     <div class="card-title">价格曲线 <span class="hint">点击图表可固定竖向虚线，手机全屏建议横屏</span><button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
     <div class="fs-tools" id="fsTools">
       <span class="fs-range" id="fsRangeTag"></span>
+      <button id="fsRotateBtn" aria-label="强制横屏">⟳ 横屏</button>
       <button id="fsSettingsBtn" aria-label="打开观测设置">⚙ 设置</button>
       <button id="fsExitBtn" aria-label="退出全屏">⛶ 退出</button>
     </div>
@@ -263,6 +270,7 @@ tr:hover td{background:var(--muted);}
       </div>
     </div>
     <div class="chart-wrap"><canvas id="chart"></canvas><canvas id="overlay"></canvas><div id="tip"></div><div class="fs-hint">横屏观看效果更佳<br>请旋转手机</div></div>
+    <div class="fs-rotate-note" id="fsRotateNote">浏览器不允许自动旋转<br>画面已按横屏方向排布，请转动手机</div>
     <div class="legend-note" id="legendNote"></div>
   </div>
 
