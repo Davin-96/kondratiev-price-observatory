@@ -125,6 +125,11 @@ tr:hover td{background:var(--muted);}
 .fs-tools{display:none;position:absolute;top:8px;right:10px;z-index:40;gap:6px;align-items:center;}
 #chartCard:fullscreen .fs-tools,.chart-card-fs .fs-tools{display:flex;}
 .fs-tools button{padding:5px 10px;font-size:12px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);}
+.fs-rotate-note{display:none;position:absolute;left:50%;top:50%;z-index:45;
+  transform:translate(-50%,-50%);background:rgba(9,9,11,.88);color:#fff;
+  padding:14px 20px;border-radius:12px;font-size:14px;text-align:center;line-height:1.6;
+  max-width:80%;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.3);}
+#chartCard.fs-rotated .fs-rotate-note{transform:translate(-50%,-50%) rotate(-90deg);}
 .fs-range{font-size:11px;color:var(--muted-foreground);background:var(--card);border:1px solid var(--border);
   border-radius:999px;padding:4px 9px;box-shadow:var(--shadow);white-space:nowrap;}
 .fs-scrim{display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.16);}
@@ -167,6 +172,7 @@ tr:hover td{background:var(--muted);}
     <div class="head-actions">
       <button class="ghost" id="themeBtn" title="切换亮暗">◐ 主题</button>
       <button class="ghost" id="refreshBtn" title="拉取实时数据">↻ 刷新实时数据</button>
+      <button class="ghost" id="forceLandscapeBtn" title="尝试锁定横屏">⟳ 强制横屏</button>
     </div>
   </div>
   <div class="statusbar" id="status"><span class="pulse"></span><span>数据加载中…</span></div>
@@ -245,6 +251,7 @@ tr:hover td{background:var(--muted);}
     <div class="card-title">价格曲线 <span class="hint">点击图表可固定竖向虚线，手机全屏建议横屏</span><button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
     <div class="fs-tools" id="fsTools">
       <span class="fs-range" id="fsRangeTag"></span>
+      <button id="fsRotateBtn" aria-label="强制横屏">⟳ 横屏</button>
       <button id="fsSettingsBtn" aria-label="打开观测设置">⚙ 设置</button>
       <button id="fsExitBtn" aria-label="退出全屏">⛶ 退出</button>
     </div>
@@ -263,6 +270,7 @@ tr:hover td{background:var(--muted);}
       </div>
     </div>
     <div class="chart-wrap"><canvas id="chart"></canvas><canvas id="overlay"></canvas><div id="tip"></div><div class="fs-hint">横屏观看效果更佳<br>请旋转手机</div></div>
+    <div class="fs-rotate-note" id="fsRotateNote">浏览器不允许自动旋转<br>画面已按横屏方向排布，请转动手机</div>
     <div class="legend-note" id="legendNote"></div>
   </div>
 
@@ -709,7 +717,7 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
       var tAt=gesture.t0+Math.max(0,Math.min(1,(gesture.x0-geom.l)/pw))*span0;
       var ratio=(tAt-gesture.t0)/span0;
       var z0=tAt-span*ratio;
-      var dt=(x-gesture.x0)/pw*span0;
+      var dt=(x-gesture.x0)/pw*span;
       var nt0=Math.max(f0,Math.min(f1-span,z0-dt));
       view.t0=nt0;view.t1=nt0+span;render();
       e.preventDefault();return;
@@ -1066,17 +1074,32 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
     function lockLandscape(){
       try{
         if(window.screen&&screen.orientation&&screen.orientation.lock)
-          return screen.orientation.lock('landscape').catch(function(){});
+          return screen.orientation.lock('landscape');
       }catch(e){}
-      return Promise.resolve();
+      return null;
     }
-    function isTouchDevice(){
-      return ('ontouchstart' in window)||(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches);
+    var rotateNote=document.getElementById('fsRotateNote'),noteTimer=null;
+    function hideRotateNote(){rotateNote.style.display='none';if(noteTimer){clearTimeout(noteTimer);noteTimer=null;}}
+    function showRotateNote(){
+      rotateNote.style.display='block';
+      if(noteTimer) clearTimeout(noteTimer);
+      noteTimer=setTimeout(hideRotateNote,3600);
     }
     function syncOrientation(){
-      var need=fsActive&&isTouchDevice()&&window.innerHeight>window.innerWidth+10;
+      var need=fsActive&&window.innerWidth<=900&&window.innerHeight>window.innerWidth+10;
       card.classList.toggle('fs-rotated',need);
+      if(!need) hideRotateNote();
       setTimeout(function(){render();syncDateUI();},80);
+    }
+    function forceLandscape(){
+      if(!isFullscreen()) fullBtn.click();
+      var p=lockLandscape();
+      if(p&&p.then) p.then(hideRotateNote).catch(function(){
+        if(window.innerHeight>window.innerWidth) showRotateNote();
+      });
+      card.classList.toggle('fs-rotated',window.innerHeight>window.innerWidth+10);
+      setTimeout(function(){render();syncDateUI();},100);
+      setTimeout(function(){if(window.innerHeight>window.innerWidth) showRotateNote();},700);
     }
     function afterFullscreen(){
       syncFullscreenUi();
@@ -1092,7 +1115,7 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
         afterFullscreen();
       } else {
         if(card.requestFullscreen){
-          card.requestFullscreen().then(function(){lockLandscape();}).catch(function(){
+          card.requestFullscreen().then(function(){var p=lockLandscape();if(p&&p.catch)p.catch(function(){});}).catch(function(){
             card.classList.add('chart-card-fs');afterFullscreen();
           });
         } else {
@@ -1102,6 +1125,8 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
       }
     };
     document.getElementById('fsExitBtn').onclick=function(){fullBtn.click();};
+    document.getElementById('fsRotateBtn').onclick=forceLandscape;
+    document.getElementById('forceLandscapeBtn').onclick=forceLandscape;
     document.getElementById('fsSettingsBtn').onclick=function(){
       if(!isFullscreen()) return;
       var open=!card.classList.contains('fs-open');
