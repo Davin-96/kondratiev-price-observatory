@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>康波周期 · 大宗商品价格长波观测台</title>
+<style>
+:root{
+  --radius:0.625rem;
+  --background:#ffffff; --foreground:#18181b;
+  --card:#ffffff; --card-foreground:#18181b;
+  --popover:#ffffff; --muted:#f4f4f5; --muted-foreground:#71717a;
+  --primary:#18181b; --primary-foreground:#fafafa;
+  --secondary:#f4f4f5; --accent:#f4f4f5;
+  --border:#e4e4e7; --input:#e4e4e7; --ring:#a1a1aa;
+  --success:#16a34a; --danger:#dc2626;
+  --gold:#D4A017; --up:#dc2626; --down:#16a34a;
+  --chart-text:#52525b; --grid-line:#e4e4e7;
+  --shadow:0 1px 3px rgba(0,0,0,.08);
+}
+html.dark{
+  --background:#09090b; --foreground:#fafafa;
+  --card:#18181b; --card-foreground:#fafafa;
+  --popover:#18181b; --muted:#27272a; --muted-foreground:#a1a1aa;
+  --primary:#fafafa; --primary-foreground:#18181b;
+  --secondary:#27272a; --accent:#27272a;
+  --border:#3f3f46; --input:#3f3f46; --ring:#71717a;
+  --chart-text:#a1a1aa; --grid-line:#3f3f46;
+  --shadow:0 1px 3px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--background);color:var(--foreground);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s;}
+.wrap{max-width:1440px;margin:0 auto;padding:28px 32px 60px;}
+h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0;}
+.sub{color:var(--muted-foreground);font-size:13px;margin-top:6px;}
+.head{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:14px;flex-wrap:wrap;}
+.head-actions{display:flex;gap:8px;flex:none;}
+button{font-family:inherit;font-size:13px;cursor:pointer;border-radius:calc(var(--radius)*.8);
+  border:1px solid var(--border);background:var(--card);color:var(--foreground);
+  padding:8px 14px;white-space:nowrap;transition:background .15s,border-color .15s,transform .1s;}
+button:hover{background:var(--accent);}
+button:active{transform:translateY(1px);}
+button:disabled{opacity:.55;cursor:wait;}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted-foreground);}
+button.ghost:hover{background:var(--accent);color:var(--foreground);}
+button.on{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary);}
+.statusbar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted-foreground);
+  min-height:22px;margin-bottom:18px;flex-wrap:wrap;}
+.statusbar .pulse{width:7px;height:7px;border-radius:50%;background:var(--success);flex:none;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius)*1.2);
+  padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px;}
+.card-title{font-size:14px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.card-title .hint{font-weight:400;color:var(--muted-foreground);font-size:12px;}
+.ctrl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 32px;}
+.ctrl-cell{min-width:0;}
+.ctrl-group label,.lbl{display:block;font-size:12px;color:var(--muted-foreground);margin-bottom:7px;font-weight:500;}
+.lbl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px;}
+.lbl-row .lbl{margin-bottom:0;}
+.mini-actions{display:flex;gap:6px;}
+.mini-actions button{padding:3px 10px;font-size:11px;border-radius:6px;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:calc(var(--radius)*.8);
+  overflow:hidden;background:var(--card);max-width:100%;flex-wrap:wrap;}
+.seg button{border:0;border-radius:0;padding:7px 13px;border-right:1px solid var(--border);background:transparent;}
+.seg button:last-child{border-right:0;}
+.seg button.on{background:var(--primary);color:var(--primary-foreground);}
+.chips{display:flex;flex-wrap:wrap;gap:7px;}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;
+  padding:5px 12px;font-size:12px;background:var(--card);transition:all .15s;}
+.chip:hover{background:var(--accent);}
+.chip.on{border-color:var(--primary);background:var(--primary);color:var(--primary-foreground);}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;}
+.date-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+input[type=date]{font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--border);
+  border-radius:calc(var(--radius)*.8);background:var(--card);color:var(--foreground);color-scheme:light;}
+html.dark input[type=date]{color-scheme:dark;}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;}
+.quick button{padding:4px 10px;font-size:12px;border-radius:999px;}
+.slider-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted-foreground);margin:12px 0 4px;}
+.slider-head button{padding:2px 8px;font-size:11px;}
+#timeSlider{display:block;width:100%;height:30px;cursor:pointer;touch-action:none;}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;margin-top:4px;}
+.toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;}
+.api-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+.api-row input[type=text]{flex:1;min-width:180px;font-family:inherit;font-size:12px;padding:6px 10px;
+  border:1px solid var(--border);border-radius:calc(var(--radius)*.8);background:var(--card);color:var(--foreground);}
+.chart-wrap{position:relative;width:100%;height:560px;}
+#chart,#overlay{display:block;width:100%;height:100%;}
+#overlay{position:absolute;left:0;top:0;pointer-events:none;z-index:5;}
+#tip{position:absolute;pointer-events:none;display:none;z-index:10;
+  background:var(--popover);border:1px solid var(--border);border-radius:calc(var(--radius)*.8);
+  padding:9px 12px;font-size:12px;box-shadow:var(--shadow);min-width:150px;line-height:1.7;}
+#tip .t-h{font-weight:600;margin-bottom:4px;}
+#tip .t-r{display:flex;justify-content:space-between;gap:16px;}
+.legend-note{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12px;color:var(--muted-foreground);}
+.legend-note span{display:inline-flex;align-items:center;gap:6px;}
+.band{width:14px;height:10px;border-radius:2px;display:inline-block;}
+.foot-note{font-size:12px;color:var(--muted-foreground);line-height:1.8;}
+.foot-note b{color:var(--foreground);font-weight:600;}
+details{margin-top:4px;}
+summary{cursor:pointer;font-size:13px;color:var(--muted-foreground);padding:6px 0;}
+summary:hover{color:var(--foreground);}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+th{color:var(--muted-foreground);font-weight:500;}
+tr:hover td{background:var(--muted);}
+.disc{font-size:12px;color:var(--muted-foreground);border-top:1px solid var(--border);
+  padding-top:18px;margin-top:24px;line-height:1.9;}
+.fs-timebar{display:none;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px;
+  background:var(--muted);border-radius:calc(var(--radius)*.8);}
+.fs-timebar .date-row{order:1;}
+.fs-timebar .quick{order:2;margin-top:0;}
+.fs-timebar .fs-lbl{font-size:12px;color:var(--muted-foreground);font-weight:500;}
+#chartCard:fullscreen{width:100vw;height:100vh;padding:14px 18px;display:flex;flex-direction:column;margin:0;border-radius:0;}
+#chartCard:fullscreen .fs-timebar{display:flex;flex:none;}
+#chartCard:fullscreen .chart-wrap{flex:1;min-height:0;height:auto;}
+#chartCard:fullscreen .legend-note{flex:none;}
+@media(max-width:900px){.ctrl-grid{grid-template-columns:1fr;}}
+@media(max-width:768px){.wrap{padding:18px 16px 40px;}.chart-wrap{height:460px;}h1{font-size:18px;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>康波周期 · 大宗商品价格长波观测台</h1>
+      <div class="sub">金 · 银 · 铂 · 钯 ｜ WTI · 布伦特 · 汽油 · 天然气 —— 跨越三个世纪的价格轨迹与康波长波</div>
+    </div>
+    <div class="head-actions">
+      <button class="ghost" id="themeBtn" title="切换亮暗">◐ 主题</button>
+      <button class="ghost" id="refreshBtn" title="拉取实时数据">↻ 刷新实时数据</button>
+    </div>
+  </div>
+  <div class="statusbar" id="status"><span class="pulse"></span><span>数据加载中…</span></div>
+
+  <div class="card">
+    <div class="card-title">观测控制</div>
+    <div class="ctrl-grid">
+      <div class="ctrl-cell">
+        <label>时间范围</label>
+        <div class="date-row">
+          <input type="date" id="dateStart" value="1780-01-01">
+          <span style="color:var(--muted-foreground)">→</span>
+          <input type="date" id="dateEnd" value="2026-12-31">
+        </div>
+        <div class="quick" id="quickRange">
+          <button data-p="10y">近10年</button><button data-p="5y">近5年</button>
+          <button data-p="2y">近2年</button><button data-p="6m">近半年</button>
+          <button data-p="3m">近3个月</button><button data-p="1m">近1个月</button>
+        </div>
+        <div class="slider-head"><span id="sliderLabel">1780 — 2026</span><button id="allRangeBtn" class="ghost">全跨度</button></div>
+        <canvas id="timeSlider"></canvas>
+      </div>
+      <div class="ctrl-cell">
+        <div class="lbl-row">
+          <span class="lbl">显示品种</span>
+          <span class="mini-actions"><button id="selAllBtn">全选</button><button id="selNoneBtn">清空</button></span>
+        </div>
+        <div class="chips" id="seriesChips"></div>
+        <label class="toggle"><input type="checkbox" id="eventToggle" checked> 历史事件标注</label>
+        <label class="toggle"><input type="checkbox" id="ratioToggle"> 金油比 / 金银比（右轴）</label>
+      </div>
+      <div class="ctrl-cell">
+        <label>价格口径</label>
+        <div class="seg" id="modeSeg">
+          <button data-m="raw" class="on">绝对价格</button>
+          <button data-m="norm">归一化</button>
+          <button data-m="real">实际价格</button>
+        </div>
+        <label style="margin-top:14px">计价锚点</label>
+        <div class="seg" id="anchorSeg">
+          <button data-c="usd" class="on">美元 USD</button>
+          <button data-c="cny">人民币 CNY</button>
+        </div>
+      </div>
+      <div class="ctrl-cell">
+        <label>坐标轴</label>
+        <div class="seg" id="axisSeg">
+          <button data-a="linear" class="on">线性</button>
+          <button data-a="log">对数</button>
+        </div>
+        <label style="margin-top:18px">康波周期背景带</label>
+        <div class="seg" id="kondratievSeg">
+          <button data-k="off">关闭</button><button data-k="zhou" class="on">周金涛</button><button data-k="zeping">泽平</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="chartCard">
+    <div class="card-title">价格曲线 <button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
+    <div class="fs-timebar" id="fsTimebar">
+      <span class="fs-lbl">时间范围</span>
+      <div class="date-row">
+        <input type="date" id="fsDateStart"><span style="color:var(--muted-foreground)">→</span><input type="date" id="fsDateEnd">
+      </div>
+      <div class="quick" id="fsQuickRange">
+        <button data-p="10y">近10年</button><button data-p="5y">近5年</button>
+        <button data-p="2y">近2年</button><button data-p="6m">近半年</button>
+        <button data-p="3m">近3个月</button><button data-p="1m">近1个月</button>
+        <button data-p="all">全跨度</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="chart"></canvas><canvas id="overlay"></canvas><div id="tip"></div></div>
+    <div class="legend-note" id="legendNote"></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>数据来源、口径与缺口说明</summary>
+      <table id="sourceTable">
+        <thead><tr><th>品种</th><th>数据起点</th><th>数据终点</th><th>点数</th><th>来源</th><th>口径备注</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="foot-note" style="margin-top:14px">
+        <b>康波划分：</b>无统一断代标准。周金涛体系第四波终于1991、第五波1991起；泽平体系第四波终于1982、第五波1982起。背景带仅作时间坐标参考。<br>
+        <b>可比性：</b>金银早期为英镑/贵金属本位计价，现代为美元。归一化以窗口内首个有效点为基准；实际价格用 CPI（1982–84=100）平减至窗口末期。人民币锚点按现货汇率折算（贵金属 USD/oz ÷31.1035 × USD/CNY，汽油 USD/gal ÷3.7854 × USD/CNY）。<br>
+        <b>缺口：</b>油气始于1986–1997年，能源无法覆盖前四轮康波；按真实起点绘线，不外推补齐。2026-02 至 11 月的历史段各源未更新，实时点以虚线呈现并由本地累积逐步补齐。
+      </div>
+    </details>
+  </div>
+
+  <div class="disc">
+    数据来源：MeasuringWorth / freegoldapi.com / World Bank Pink Sheet（CC BY 4.0）/ GoldPrice.com（CC BY 4.0）/ U.S. EIA / FRED / api.gold-api.com / open.er-api.com / Alpha Vantage。<br>
+    <b>免责声明</b>：基于公开数据与量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。过往表现不预示未来收益。<br>
+    <details style="margin-top:10px">
+      <summary>实时数据源密钥配置（仅能源需要，其余公开 API 已内置）</summary>
+      <div class="api-row">
+        <input type="text" id="apiKeyInput" placeholder="Alpha Vantage 免费 API key（WTI / 布伦特 / 天然气）" autocomplete="off">
+        <button id="saveKeyBtn">保存 key</button>
+        <button id="clearKeyBtn" class="ghost">清除</button>
+      </div>
+      <div class="foot-note" style="margin-top:8px">内置公开源：api.gold-api.com（金/银/铂/钯）、freegoldapi.com（黄金历史与金银比）、open.er-api.com 与 exchangerate-api.com（汇率）。能源 Alpha Vantage 需免费 key，填入后自动拉取；不填则用预置数据。key 仅存于本机浏览器。</div>
+    </details>
+  </div>
+</div>
+
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>
