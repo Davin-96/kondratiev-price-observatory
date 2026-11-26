@@ -139,10 +139,19 @@
   var drawn=[], eventHits=[];
   var yRange=[0,1], ratioYRange=[0,1];
 
+  function cardRotated(){
+    var c=document.getElementById('chartCard');
+    return !!(c&&c.classList.contains('fs-rotated'));
+  }
+  function localXY(el,cx,cy){
+    var r=el.getBoundingClientRect();
+    if(cardRotated()) return {x:cy-r.top,y:r.width-(cx-r.left)};
+    return {x:cx-r.left,y:cy-r.top};
+  }
+
   function render(){
-    var rect=canvas.getBoundingClientRect();
-    geom.w=rect.width; geom.h=rect.height;
-    canvas.width=Math.round(rect.width*dpr); canvas.height=Math.round(rect.height*dpr);
+    geom.w=canvas.clientWidth; geom.h=canvas.clientHeight;
+    canvas.width=Math.round(geom.w*dpr); canvas.height=Math.round(geom.h*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,geom.w,geom.h);
     var textC=cssVar('--chart-text')||'#52525b', gridC=cssVar('--grid-line')||'#e4e4e7', mutedC=cssVar('--muted-foreground')||'#71717a';
 
@@ -251,8 +260,8 @@
 
   var SL={pad:10,w:0,h:0,a:0,b:0,handleW:12,drag:null};
   function drawTimeSlider(){
-    var r=slider.getBoundingClientRect(); SL.w=r.width;SL.h=r.height;
-    slider.width=Math.round(r.width*dpr);slider.height=Math.round(r.height*dpr);
+    SL.w=slider.clientWidth;SL.h=slider.clientHeight;
+    slider.width=Math.round(SL.w*dpr);slider.height=Math.round(SL.h*dpr);
     sctx.setTransform(dpr,0,0,dpr,0,0);sctx.clearRect(0,0,SL.w,SL.h);
     var trackY=10,trackH=8,x0=SL.pad,x1=SL.w-SL.pad,tw=x1-x0;
     var f0=ts(FULL_START),f1=ts(FULL_END);
@@ -278,14 +287,14 @@
     return dateOf(f0+Math.max(0,Math.min(1,(x-x0)/tw))*(f1-f0));
   }
   slider.addEventListener('pointerdown',function(e){
-    var r=slider.getBoundingClientRect(),x=e.clientX-r.left;
+    var x=localXY(slider,e.clientX,e.clientY).x;
     SL.drag=Math.abs(x-SL.a)<=Math.abs(x-SL.b)?'a':'b';
     if(slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   slider.addEventListener('pointermove',function(e){
     if(!SL.drag) return;
-    var r=slider.getBoundingClientRect(),d=sliderXToDate(e.clientX-r.left);
+    var d=sliderXToDate(localXY(slider,e.clientX,e.clientY).x);
     if(SL.drag==='a'){ if(d<state.end) state.start=d; } else { if(d>state.start) state.end=d; }
     syncDateUI(); resetView(); render();
   });
@@ -294,6 +303,8 @@
     ['dateStart','fsDateStart'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=state.start;});
     ['dateEnd','fsDateEnd'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=state.end;});
     document.getElementById('sliderLabel').textContent=state.start.slice(0,4)+' — '+state.end.slice(0,4);
+    var tag=document.getElementById('fsRangeTag');
+    if(tag) tag.textContent=state.start.slice(0,4)+' — '+state.end.slice(0,4);
   }
 
   var hover={ x:null, y:null, inChart:false, event:null };
@@ -350,35 +361,75 @@
     return v.toFixed(3);
   }
 
-  var drag=null;
+  var drag=null,gesture=null;
+  function setPinFromTouch(t){
+    var p=localXY(canvas,t.clientX,t.clientY);
+    var x=Math.max(geom.l,Math.min(geom.w-geom.r,p.x));
+    var y=Math.max(geom.t,Math.min(geom.h-geom.b,p.y));
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
+    drawOverlay();showTip(x,y);
+  }
+  function initGesture(touches){
+    var a=localXY(canvas,touches[0].clientX,touches[0].clientY);
+    var b=localXY(canvas,touches[1].clientX,touches[1].clientY);
+    return {x0:(a.x+b.x)/2,d0:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),t0:view.t0,t1:view.t1};
+  }
   canvas.addEventListener('mousedown',function(e){
-    var r=canvas.getBoundingClientRect();
-    drag={x0:e.clientX-r.left,t0:view.t0,t1:view.t1,moved:false};
+    var p=localXY(canvas,e.clientX,e.clientY);
+    drag={x0:p.x,t0:view.t0,t1:view.t1,moved:false};
   });
   canvas.addEventListener('click',function(e){
     if(drag&&drag.moved) return;
-    var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    var p=localXY(canvas,e.clientX,e.clientY),x=p.x,y=p.y;
     if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b) return;
     pinned={x:x,y:y};hover.x=x;hover.y=y;hover.event=null;
     drawOverlay();showTip(x,y);
   });
   canvas.addEventListener('touchstart',function(e){
-    if(e.touches.length!==1)return;
-    var p=e.touches[0],r=canvas.getBoundingClientRect(),x=p.clientX-r.left,y=p.clientY-r.top;
+    if(e.touches.length>=2){
+      gesture=initGesture(e.touches);pinned=null;hover.inChart=false;
+      tip.style.display='none';drawOverlay();e.preventDefault();return;
+    }
+    var t=e.touches[0],p=localXY(canvas,t.clientX,t.clientY),x=p.x,y=p.y;
     if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b)return;
     pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
     drawOverlay();showTip(x,y);e.preventDefault();
   },{passive:false});
   canvas.addEventListener('touchmove',function(e){
-    if(!pinned||e.touches.length!==1)return;
-    var p=e.touches[0],r=canvas.getBoundingClientRect();
-    var x=Math.max(geom.l,Math.min(geom.w-geom.r,p.clientX-r.left));
-    var y=Math.max(geom.t,Math.min(geom.h-geom.b,p.clientY-r.top));
-    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
-    drawOverlay();showTip(x,y);e.preventDefault();
+    if(e.touches.length>=2){
+      if(!gesture) gesture=initGesture(e.touches);
+      var a=localXY(canvas,e.touches[0].clientX,e.touches[0].clientY);
+      var b=localXY(canvas,e.touches[1].clientX,e.touches[1].clientY);
+      var x=(a.x+b.x)/2,d=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y));
+      var f0=ts(state.start),f1=ts(state.end),fullSpan=f1-f0;
+      var span0=gesture.t1-gesture.t0;
+      var factor=Math.max(0.15,Math.min(6.6,gesture.d0/d));
+      var span=Math.max(fullSpan*0.008,Math.min(fullSpan,span0*factor));
+      var pw=Math.max(1,geom.w-geom.l-geom.r);
+      var tAt=gesture.t0+Math.max(0,Math.min(1,(gesture.x0-geom.l)/pw))*span0;
+      var ratio=(tAt-gesture.t0)/span0;
+      var z0=tAt-span*ratio;
+      var dt=(x-gesture.x0)/pw*span0;
+      var nt0=Math.max(f0,Math.min(f1-span,z0-dt));
+      view.t0=nt0;view.t1=nt0+span;render();
+      e.preventDefault();return;
+    }
+    if(gesture){
+      gesture=null;
+      if(e.touches.length===1) setPinFromTouch(e.touches[0]);
+      e.preventDefault();return;
+    }
+    if(!pinned)return;
+    setPinFromTouch(e.touches[0]);e.preventDefault();
   },{passive:false});
+  ['touchend','touchcancel'].forEach(function(ev){
+    canvas.addEventListener(ev,function(e){
+      if(e.touches.length<2) gesture=null;
+      if(e.touches.length===1&&pinned) setPinFromTouch(e.touches[0]);
+    });
+  });
   window.addEventListener('mousemove',function(e){
-    var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    var p=localXY(canvas,e.clientX,e.clientY),x=p.x,y=p.y;
     if(drag&&(x<geom.l||x>geom.w-geom.r)===false){
       if(Math.abs(x-drag.x0)>2) drag.moved=true;
       hover.inChart=false;drawOverlay();
@@ -411,7 +462,7 @@
   });
   canvas.addEventListener('wheel',function(e){
     e.preventDefault();
-    var r=canvas.getBoundingClientRect(),x=e.clientX-r.left;
+    var x=localXY(canvas,e.clientX,e.clientY).x;
     if(x<geom.l||x>geom.w-geom.r) return;
     var tAt=tOf(x),factor=e.deltaY>0?1.18:0.85;
     var f0=ts(state.start),f1=ts(state.end),fullSpan=f1-f0;
@@ -695,32 +746,72 @@
       document.getElementById('status').innerHTML='<span class="pulse"></span><span>已清除能源 API key</span>';
     };
     var fullBtn=document.getElementById('fullBtn'),card=document.getElementById('chartCard');
+    var controlCard=document.getElementById('controlCard'),controlHome=document.getElementById('controlHome');
+    var drawerBody=document.getElementById('fsDrawerBody'),scrim=document.getElementById('fsScrim');
+    var fsActive=false;
+    function isFullscreen(){return document.fullscreenElement===card||card.classList.contains('chart-card-fs');}
+    function closeDrawer(){card.classList.remove('fs-open');}
+    function syncFullscreenUi(){
+      var now=isFullscreen();
+      if(now===fsActive) return;
+      fsActive=now;
+      if(now){
+        drawerBody.appendChild(controlCard);
+        closeDrawer();
+      }else{
+        closeDrawer();
+        controlHome.parentNode.insertBefore(controlCard,controlHome.nextSibling);
+      }
+    }
     function lockLandscape(){
-      try{ if(window.screen&&screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
+      try{
+        if(window.screen&&screen.orientation&&screen.orientation.lock)
+          return screen.orientation.lock('landscape').catch(function(){});
+      }catch(e){}
+      return Promise.resolve();
+    }
+    function isTouchDevice(){
+      return ('ontouchstart' in window)||(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches);
+    }
+    function syncOrientation(){
+      var need=fsActive&&isTouchDevice()&&window.innerHeight>window.innerWidth+10;
+      card.classList.toggle('fs-rotated',need);
+      setTimeout(function(){render();syncDateUI();},80);
     }
     function afterFullscreen(){
-      fullBtn.textContent=(document.fullscreenElement||card.classList.contains('chart-card-fs'))?'⛶ 退出全屏':'⛶ 全屏';
+      syncFullscreenUi();
+      fullBtn.textContent=isFullscreen()?'⛶ 退出全屏':'⛶ 全屏';
+      syncOrientation();
       setTimeout(function(){render();syncDateUI();},120);
     }
     fullBtn.onclick=function(){
-      if(document.fullscreenElement||card.classList.contains('chart-card-fs')){
+      if(isFullscreen()){
         if(document.fullscreenElement) document.exitFullscreen().catch(function(){});
-        card.classList.remove('chart-card-fs');
+        card.classList.remove('chart-card-fs','fs-rotated');
         try{ if(window.screen&&screen.orientation&&screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
-        fullBtn.textContent='⛶ 全屏';setTimeout(function(){render();syncDateUI();},120);
+        afterFullscreen();
       } else {
-        lockLandscape();
         if(card.requestFullscreen){
-          card.requestFullscreen().catch(function(){card.classList.add('chart-card-fs');afterFullscreen();});
+          card.requestFullscreen().then(function(){lockLandscape();}).catch(function(){
+            card.classList.add('chart-card-fs');afterFullscreen();
+          });
         } else {
           card.classList.add('chart-card-fs');afterFullscreen();
         }
         fullBtn.textContent='⛶ 退出全屏';
       }
     };
+    document.getElementById('fsExitBtn').onclick=function(){fullBtn.click();};
+    document.getElementById('fsSettingsBtn').onclick=function(){
+      if(!isFullscreen()) return;
+      var open=!card.classList.contains('fs-open');
+      card.classList.toggle('fs-open',open);
+      if(open) setTimeout(function(){render();syncDateUI();},60);
+    };
+    scrim.onclick=closeDrawer;
     document.addEventListener('fullscreenchange',afterFullscreen);
-    window.addEventListener('orientationchange',function(){setTimeout(function(){render();syncDateUI();},200);});
-    window.addEventListener('resize',function(){render();});
+    window.addEventListener('orientationchange',function(){setTimeout(syncOrientation,200);});
+    window.addEventListener('resize',function(){syncOrientation();});
     setTimeout(function(){tryLiveUpdate(true);},500);
   }
   init();
