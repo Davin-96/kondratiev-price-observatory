@@ -297,15 +297,17 @@
   }
 
   var hover={ x:null, y:null, inChart:false, event:null };
+  var pinned=null;
   function drawOverlay(){
     if(overlay.width!==canvas.width||overlay.height!==canvas.height){
       overlay.width=canvas.width;overlay.height=canvas.height;
     }
     octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,geom.w,geom.h);
-    if(!hover.inChart) return;
+    if(!hover.inChart&&!pinned) return;
+    var src=hover.inChart?hover:pinned;
 
-    if(hover.event){
-      var e=hover.event;
+    if(src.event){
+      var e=src.event;
       var xa=xOf(ts(e.s+'-01-01')),xb=xOf(ts(e.e+'-12-31'));
       var lo=Math.max(xa,geom.l),hi=Math.min(xb,geom.w-geom.r);
       octx.fillStyle='rgba(220,38,38,0.10)';
@@ -316,8 +318,8 @@
       return;
     }
 
-    if(hover.x===null||hover.x<geom.l||hover.x>geom.w-geom.r||hover.y<geom.t||hover.y>geom.h-geom.b) return;
-    var t=tOf(hover.x),x=xOf(t);
+    if(src.x===null||src.x<geom.l||src.x>geom.w-geom.r||src.y<geom.t||src.y>geom.h-geom.b) return;
+    var t=tOf(src.x),x=xOf(t);
     octx.strokeStyle=cssVar('--chart-text')||'#52525b';octx.globalAlpha=0.5;
     octx.setLineDash([4,3]);octx.lineWidth=1;
     octx.beginPath();octx.moveTo(x+0.5,geom.t);octx.lineTo(x+0.5,geom.h-geom.b);octx.stroke();
@@ -351,11 +353,34 @@
   var drag=null;
   canvas.addEventListener('mousedown',function(e){
     var r=canvas.getBoundingClientRect();
-    drag={x0:e.clientX-r.left,t0:view.t0,t1:view.t1};
+    drag={x0:e.clientX-r.left,t0:view.t0,t1:view.t1,moved:false};
   });
+  canvas.addEventListener('click',function(e){
+    if(drag&&drag.moved) return;
+    var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b) return;
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.event=null;
+    drawOverlay();showTip(x,y);
+  });
+  canvas.addEventListener('touchstart',function(e){
+    if(e.touches.length!==1)return;
+    var p=e.touches[0],r=canvas.getBoundingClientRect(),x=p.clientX-r.left,y=p.clientY-r.top;
+    if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b)return;
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
+    drawOverlay();showTip(x,y);e.preventDefault();
+  },{passive:false});
+  canvas.addEventListener('touchmove',function(e){
+    if(!pinned||e.touches.length!==1)return;
+    var p=e.touches[0],r=canvas.getBoundingClientRect();
+    var x=Math.max(geom.l,Math.min(geom.w-geom.r,p.clientX-r.left));
+    var y=Math.max(geom.t,Math.min(geom.h-geom.b,p.clientY-r.top));
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
+    drawOverlay();showTip(x,y);e.preventDefault();
+  },{passive:false});
   window.addEventListener('mousemove',function(e){
     var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
     if(drag&&(x<geom.l||x>geom.w-geom.r)===false){
+      if(Math.abs(x-drag.x0)>2) drag.moved=true;
       hover.inChart=false;drawOverlay();
       var dt=(x-drag.x0)/(geom.w-geom.l-geom.r)*(drag.t1-drag.t0);
       var f0=ts(state.start),f1=ts(state.end),span=drag.t1-drag.t0;
@@ -375,11 +400,14 @@
     drawOverlay();
     if(overEvent) showEventTip(overEvent,x,y);
     else if(prev) tip.style.display='none';
+    else if(pinned&&!hover.inChart) showTip(pinned.x,pinned.y);
     else showTip(x,y);
   });
   window.addEventListener('mouseup',function(){drag=null;});
   canvas.addEventListener('mouseleave',function(){
-    hover.inChart=false;hover.event=null;tip.style.display='none';drawOverlay();
+    hover.inChart=false;hover.event=null;
+    if(pinned){drawOverlay();showTip(pinned.x,pinned.y);}
+    else {tip.style.display='none';drawOverlay();}
   });
   canvas.addEventListener('wheel',function(e){
     e.preventDefault();
@@ -667,14 +695,31 @@
       document.getElementById('status').innerHTML='<span class="pulse"></span><span>已清除能源 API key</span>';
     };
     var fullBtn=document.getElementById('fullBtn'),card=document.getElementById('chartCard');
+    function lockLandscape(){
+      try{ if(window.screen&&screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
+    }
+    function afterFullscreen(){
+      fullBtn.textContent=(document.fullscreenElement||card.classList.contains('chart-card-fs'))?'⛶ 退出全屏':'⛶ 全屏';
+      setTimeout(function(){render();syncDateUI();},120);
+    }
     fullBtn.onclick=function(){
-      if(document.fullscreenElement) document.exitFullscreen();
-      else if(card.requestFullscreen) card.requestFullscreen();
+      if(document.fullscreenElement||card.classList.contains('chart-card-fs')){
+        if(document.fullscreenElement) document.exitFullscreen().catch(function(){});
+        card.classList.remove('chart-card-fs');
+        try{ if(window.screen&&screen.orientation&&screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
+        fullBtn.textContent='⛶ 全屏';setTimeout(function(){render();syncDateUI();},120);
+      } else {
+        lockLandscape();
+        if(card.requestFullscreen){
+          card.requestFullscreen().catch(function(){card.classList.add('chart-card-fs');afterFullscreen();});
+        } else {
+          card.classList.add('chart-card-fs');afterFullscreen();
+        }
+        fullBtn.textContent='⛶ 退出全屏';
+      }
     };
-    document.addEventListener('fullscreenchange',function(){
-      fullBtn.textContent=document.fullscreenElement?'⛶ 退出全屏':'⛶ 全屏';
-      setTimeout(function(){render();syncDateUI();},80);
-    });
+    document.addEventListener('fullscreenchange',afterFullscreen);
+    window.addEventListener('orientationchange',function(){setTimeout(function(){render();syncDateUI();},200);});
     window.addEventListener('resize',function(){render();});
     setTimeout(function(){tryLiveUpdate(true);},500);
   }

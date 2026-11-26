@@ -35,8 +35,9 @@ body{margin:0;background:var(--background);color:var(--foreground);
 .wrap{max-width:1440px;margin:0 auto;padding:28px 32px 60px;}
 h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0;}
 .sub{color:var(--muted-foreground);font-size:13px;margin-top:6px;}
-.head{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:14px;flex-wrap:wrap;}
-.head-actions{display:flex;gap:8px;flex:none;}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:14px;flex-wrap:wrap;}
+.head>div:first-child{min-width:0;}
+.head-actions{display:flex;gap:8px;flex:none;margin-left:auto;}
 button{font-family:inherit;font-size:13px;cursor:pointer;border-radius:calc(var(--radius)*.8);
   border:1px solid var(--border);background:var(--card);color:var(--foreground);
   padding:8px 14px;white-space:nowrap;transition:background .15s,border-color .15s,transform .1s;}
@@ -53,16 +54,18 @@ button.on{background:var(--primary);color:var(--primary-foreground);border-color
   padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px;}
 .card-title{font-size:14px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .card-title .hint{font-weight:400;color:var(--muted-foreground);font-size:12px;}
-.ctrl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 32px;}
+.ctrl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 32px;align-items:start;}
 .ctrl-cell{min-width:0;}
+.ctrl-block{min-width:0;}
+.ctrl-block+.ctrl-block{margin-top:16px;}
 .ctrl-group label,.lbl{display:block;font-size:12px;color:var(--muted-foreground);margin-bottom:7px;font-weight:500;}
 .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px;}
 .lbl-row .lbl{margin-bottom:0;}
 .mini-actions{display:flex;gap:6px;}
 .mini-actions button{padding:3px 10px;font-size:11px;border-radius:6px;}
-.seg{display:inline-flex;border:1px solid var(--border);border-radius:calc(var(--radius)*.8);
+.seg{display:inline-flex;width:100%;border:1px solid var(--border);border-radius:calc(var(--radius)*.8);
   overflow:hidden;background:var(--card);max-width:100%;flex-wrap:wrap;}
-.seg button{border:0;border-radius:0;padding:7px 13px;border-right:1px solid var(--border);background:transparent;}
+.seg button{border:0;border-radius:0;padding:7px 9px;border-right:1px solid var(--border);background:transparent;flex:1 1 auto;min-width:0;white-space:nowrap;}
 .seg button:last-child{border-right:0;}
 .seg button.on{background:var(--primary);color:var(--primary-foreground);}
 .chips{display:flex;flex-wrap:wrap;gap:7px;}
@@ -112,12 +115,22 @@ tr:hover td{background:var(--muted);}
 .fs-timebar .date-row{order:1;}
 .fs-timebar .quick{order:2;margin-top:0;}
 .fs-timebar .fs-lbl{font-size:12px;color:var(--muted-foreground);font-weight:500;}
-#chartCard:fullscreen{width:100vw;height:100vh;padding:14px 18px;display:flex;flex-direction:column;margin:0;border-radius:0;}
-#chartCard:fullscreen .fs-timebar{display:flex;flex:none;}
-#chartCard:fullscreen .chart-wrap{flex:1;min-height:0;height:auto;}
-#chartCard:fullscreen .legend-note{flex:none;}
+#chartCard:fullscreen,.chart-card-fs{width:100vw;height:100vh;padding:14px 18px;display:flex;flex-direction:column;margin:0;border-radius:0;background:var(--card);}
+.chart-card-fs{position:fixed;inset:0;z-index:9999;}
+#chartCard:fullscreen .fs-timebar,.chart-card-fs .fs-timebar{display:flex;flex:none;}
+#chartCard:fullscreen .chart-wrap,.chart-card-fs .chart-wrap{flex:1;min-height:0;height:auto;}
+#chartCard:fullscreen .legend-note,.chart-card-fs .legend-note{flex:none;}
+.fs-hint{display:none;}
 @media(max-width:900px){.ctrl-grid{grid-template-columns:1fr;}}
-@media(max-width:768px){.wrap{padding:18px 16px 40px;}.chart-wrap{height:460px;}h1{font-size:18px;}}
+@media(max-width:768px){
+  .wrap{padding:18px 16px 40px;}.chart-wrap{height:460px;}h1{font-size:18px;}
+  .head{align-items:flex-start;}.head-actions{margin-left:0;width:100%;justify-content:flex-end;}
+  .ctrl-block+.ctrl-block{margin-top:14px;}
+}
+@media(max-width:768px) and (orientation:portrait){
+  #chartCard:fullscreen .fs-hint,.chart-card-fs .fs-hint{display:block;position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:20;
+    background:rgba(9,9,11,.82);color:#fff;padding:14px 22px;border-radius:12px;font-size:15px;text-align:center;line-height:1.6;pointer-events:none;white-space:nowrap;}
+}
 </style>
 </head>
 <body>
@@ -138,58 +151,73 @@ tr:hover td{background:var(--muted);}
     <div class="card-title">观测控制</div>
     <div class="ctrl-grid">
       <div class="ctrl-cell">
-        <label>时间范围</label>
-        <div class="date-row">
-          <input type="date" id="dateStart" value="1780-01-01">
-          <span style="color:var(--muted-foreground)">→</span>
-          <input type="date" id="dateEnd" value="2026-12-31">
-        </div>
-        <div class="quick" id="quickRange">
-          <button data-p="10y">近10年</button><button data-p="5y">近5年</button>
-          <button data-p="2y">近2年</button><button data-p="6m">近半年</button>
-          <button data-p="3m">近3个月</button><button data-p="1m">近1个月</button>
-        </div>
-        <div class="slider-head"><span id="sliderLabel">1780 — 2026</span><button id="allRangeBtn" class="ghost">全跨度</button></div>
-        <canvas id="timeSlider"></canvas>
-      </div>
-      <div class="ctrl-cell">
-        <div class="lbl-row">
-          <span class="lbl">显示品种</span>
-          <span class="mini-actions"><button id="selAllBtn">全选</button><button id="selNoneBtn">清空</button></span>
-        </div>
-        <div class="chips" id="seriesChips"></div>
-        <label class="toggle"><input type="checkbox" id="eventToggle" checked> 历史事件标注</label>
-        <label class="toggle"><input type="checkbox" id="ratioToggle"> 金油比 / 金银比（右轴）</label>
-      </div>
-      <div class="ctrl-cell">
-        <label>价格口径</label>
-        <div class="seg" id="modeSeg">
-          <button data-m="raw" class="on">绝对价格</button>
-          <button data-m="norm">归一化</button>
-          <button data-m="real">实际价格</button>
-        </div>
-        <label style="margin-top:14px">计价锚点</label>
-        <div class="seg" id="anchorSeg">
-          <button data-c="usd" class="on">美元 USD</button>
-          <button data-c="cny">人民币 CNY</button>
+        <div class="ctrl-block">
+          <label>时间范围</label>
+          <div class="date-row">
+            <input type="date" id="dateStart" value="1780-01-01">
+            <span style="color:var(--muted-foreground)">→</span>
+            <input type="date" id="dateEnd" value="2026-12-31">
+          </div>
+          <div class="quick" id="quickRange">
+            <button data-p="10y">近10年</button><button data-p="5y">近5年</button>
+            <button data-p="2y">近2年</button><button data-p="6m">近半年</button>
+            <button data-p="3m">近3个月</button><button data-p="1m">近1个月</button>
+          </div>
+          <div class="slider-head"><span id="sliderLabel">1780 — 2026</span><button id="allRangeBtn" class="ghost">全跨度</button></div>
+          <canvas id="timeSlider"></canvas>
         </div>
       </div>
       <div class="ctrl-cell">
-        <label>坐标轴</label>
-        <div class="seg" id="axisSeg">
-          <button data-a="linear" class="on">线性</button>
-          <button data-a="log">对数</button>
+        <div class="ctrl-block">
+          <div class="lbl-row">
+            <span class="lbl">显示品种</span>
+            <span class="mini-actions"><button id="selAllBtn">全选</button><button id="selNoneBtn">清空</button></span>
+          </div>
+          <div class="chips" id="seriesChips"></div>
         </div>
-        <label style="margin-top:18px">康波周期背景带</label>
-        <div class="seg" id="kondratievSeg">
-          <button data-k="off">关闭</button><button data-k="zhou" class="on">周金涛</button><button data-k="zeping">泽平</button>
+        <div class="ctrl-block">
+          <span class="lbl">标注与比值</span>
+          <label class="toggle"><input type="checkbox" id="eventToggle" checked> 历史事件标注</label>
+          <label class="toggle"><input type="checkbox" id="ratioToggle"> 金油比 / 金银比（右轴）</label>
+        </div>
+      </div>
+      <div class="ctrl-cell">
+        <div class="ctrl-block">
+          <label>价格口径</label>
+          <div class="seg" id="modeSeg">
+            <button data-m="raw" class="on">绝对价格</button>
+            <button data-m="norm">归一化</button>
+            <button data-m="real">实际价格</button>
+          </div>
+        </div>
+        <div class="ctrl-block">
+          <label>计价锚点</label>
+          <div class="seg" id="anchorSeg">
+            <button data-c="usd" class="on">美元 USD</button>
+            <button data-c="cny">人民币 CNY</button>
+          </div>
+        </div>
+      </div>
+      <div class="ctrl-cell">
+        <div class="ctrl-block">
+          <label>坐标轴</label>
+          <div class="seg" id="axisSeg">
+            <button data-a="linear" class="on">线性</button>
+            <button data-a="log">对数</button>
+          </div>
+        </div>
+        <div class="ctrl-block">
+          <label>康波周期背景带</label>
+          <div class="seg" id="kondratievSeg">
+            <button data-k="off">关闭</button><button data-k="zhou" class="on">周金涛</button><button data-k="zeping">泽平</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <div class="card" id="chartCard">
-    <div class="card-title">价格曲线 <button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
+    <div class="card-title">价格曲线 <span class="hint">点击图表可固定竖向虚线，手机全屏建议横屏</span><button class="ghost" id="fullBtn" style="margin-left:auto">⛶ 全屏</button></div>
     <div class="fs-timebar" id="fsTimebar">
       <span class="fs-lbl">时间范围</span>
       <div class="date-row">
@@ -202,7 +230,7 @@ tr:hover td{background:var(--muted);}
         <button data-p="all">全跨度</button>
       </div>
     </div>
-    <div class="chart-wrap"><canvas id="chart"></canvas><canvas id="overlay"></canvas><div id="tip"></div></div>
+    <div class="chart-wrap"><canvas id="chart"></canvas><canvas id="overlay"></canvas><div id="tip"></div><div class="fs-hint">横屏观看效果更佳<br>请旋转手机</div></div>
     <div class="legend-note" id="legendNote"></div>
   </div>
 
@@ -537,15 +565,17 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
   }
 
   var hover={ x:null, y:null, inChart:false, event:null };
+  var pinned=null;
   function drawOverlay(){
     if(overlay.width!==canvas.width||overlay.height!==canvas.height){
       overlay.width=canvas.width;overlay.height=canvas.height;
     }
     octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,geom.w,geom.h);
-    if(!hover.inChart) return;
+    if(!hover.inChart&&!pinned) return;
+    var src=hover.inChart?hover:pinned;
 
-    if(hover.event){
-      var e=hover.event;
+    if(src.event){
+      var e=src.event;
       var xa=xOf(ts(e.s+'-01-01')),xb=xOf(ts(e.e+'-12-31'));
       var lo=Math.max(xa,geom.l),hi=Math.min(xb,geom.w-geom.r);
       octx.fillStyle='rgba(220,38,38,0.10)';
@@ -556,8 +586,8 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
       return;
     }
 
-    if(hover.x===null||hover.x<geom.l||hover.x>geom.w-geom.r||hover.y<geom.t||hover.y>geom.h-geom.b) return;
-    var t=tOf(hover.x),x=xOf(t);
+    if(src.x===null||src.x<geom.l||src.x>geom.w-geom.r||src.y<geom.t||src.y>geom.h-geom.b) return;
+    var t=tOf(src.x),x=xOf(t);
     octx.strokeStyle=cssVar('--chart-text')||'#52525b';octx.globalAlpha=0.5;
     octx.setLineDash([4,3]);octx.lineWidth=1;
     octx.beginPath();octx.moveTo(x+0.5,geom.t);octx.lineTo(x+0.5,geom.h-geom.b);octx.stroke();
@@ -591,11 +621,34 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
   var drag=null;
   canvas.addEventListener('mousedown',function(e){
     var r=canvas.getBoundingClientRect();
-    drag={x0:e.clientX-r.left,t0:view.t0,t1:view.t1};
+    drag={x0:e.clientX-r.left,t0:view.t0,t1:view.t1,moved:false};
   });
+  canvas.addEventListener('click',function(e){
+    if(drag&&drag.moved) return;
+    var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+    if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b) return;
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.event=null;
+    drawOverlay();showTip(x,y);
+  });
+  canvas.addEventListener('touchstart',function(e){
+    if(e.touches.length!==1)return;
+    var p=e.touches[0],r=canvas.getBoundingClientRect(),x=p.clientX-r.left,y=p.clientY-r.top;
+    if(x<geom.l||x>geom.w-geom.r||y<geom.t||y>geom.h-geom.b)return;
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
+    drawOverlay();showTip(x,y);e.preventDefault();
+  },{passive:false});
+  canvas.addEventListener('touchmove',function(e){
+    if(!pinned||e.touches.length!==1)return;
+    var p=e.touches[0],r=canvas.getBoundingClientRect();
+    var x=Math.max(geom.l,Math.min(geom.w-geom.r,p.clientX-r.left));
+    var y=Math.max(geom.t,Math.min(geom.h-geom.b,p.clientY-r.top));
+    pinned={x:x,y:y};hover.x=x;hover.y=y;hover.inChart=true;hover.event=null;
+    drawOverlay();showTip(x,y);e.preventDefault();
+  },{passive:false});
   window.addEventListener('mousemove',function(e){
     var r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
     if(drag&&(x<geom.l||x>geom.w-geom.r)===false){
+      if(Math.abs(x-drag.x0)>2) drag.moved=true;
       hover.inChart=false;drawOverlay();
       var dt=(x-drag.x0)/(geom.w-geom.l-geom.r)*(drag.t1-drag.t0);
       var f0=ts(state.start),f1=ts(state.end),span=drag.t1-drag.t0;
@@ -615,11 +668,14 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
     drawOverlay();
     if(overEvent) showEventTip(overEvent,x,y);
     else if(prev) tip.style.display='none';
+    else if(pinned&&!hover.inChart) showTip(pinned.x,pinned.y);
     else showTip(x,y);
   });
   window.addEventListener('mouseup',function(){drag=null;});
   canvas.addEventListener('mouseleave',function(){
-    hover.inChart=false;hover.event=null;tip.style.display='none';drawOverlay();
+    hover.inChart=false;hover.event=null;
+    if(pinned){drawOverlay();showTip(pinned.x,pinned.y);}
+    else {tip.style.display='none';drawOverlay();}
   });
   canvas.addEventListener('wheel',function(e){
     e.preventDefault();
@@ -907,14 +963,31 @@ window.__COMMODITY_DATA__={"meta":{"gold":{"label":"黄金","group":"贵金属",
       document.getElementById('status').innerHTML='<span class="pulse"></span><span>已清除能源 API key</span>';
     };
     var fullBtn=document.getElementById('fullBtn'),card=document.getElementById('chartCard');
+    function lockLandscape(){
+      try{ if(window.screen&&screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
+    }
+    function afterFullscreen(){
+      fullBtn.textContent=(document.fullscreenElement||card.classList.contains('chart-card-fs'))?'⛶ 退出全屏':'⛶ 全屏';
+      setTimeout(function(){render();syncDateUI();},120);
+    }
     fullBtn.onclick=function(){
-      if(document.fullscreenElement) document.exitFullscreen();
-      else if(card.requestFullscreen) card.requestFullscreen();
+      if(document.fullscreenElement||card.classList.contains('chart-card-fs')){
+        if(document.fullscreenElement) document.exitFullscreen().catch(function(){});
+        card.classList.remove('chart-card-fs');
+        try{ if(window.screen&&screen.orientation&&screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
+        fullBtn.textContent='⛶ 全屏';setTimeout(function(){render();syncDateUI();},120);
+      } else {
+        lockLandscape();
+        if(card.requestFullscreen){
+          card.requestFullscreen().catch(function(){card.classList.add('chart-card-fs');afterFullscreen();});
+        } else {
+          card.classList.add('chart-card-fs');afterFullscreen();
+        }
+        fullBtn.textContent='⛶ 退出全屏';
+      }
     };
-    document.addEventListener('fullscreenchange',function(){
-      fullBtn.textContent=document.fullscreenElement?'⛶ 退出全屏':'⛶ 全屏';
-      setTimeout(function(){render();syncDateUI();},80);
-    });
+    document.addEventListener('fullscreenchange',afterFullscreen);
+    window.addEventListener('orientationchange',function(){setTimeout(function(){render();syncDateUI();},200);});
     window.addEventListener('resize',function(){render();});
     setTimeout(function(){tryLiveUpdate(true);},500);
   }
