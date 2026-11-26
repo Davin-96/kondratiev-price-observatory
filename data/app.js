@@ -409,7 +409,7 @@
       var tAt=gesture.t0+Math.max(0,Math.min(1,(gesture.x0-geom.l)/pw))*span0;
       var ratio=(tAt-gesture.t0)/span0;
       var z0=tAt-span*ratio;
-      var dt=(x-gesture.x0)/pw*span0;
+      var dt=(x-gesture.x0)/pw*span;
       var nt0=Math.max(f0,Math.min(f1-span,z0-dt));
       view.t0=nt0;view.t1=nt0+span;render();
       e.preventDefault();return;
@@ -766,17 +766,32 @@
     function lockLandscape(){
       try{
         if(window.screen&&screen.orientation&&screen.orientation.lock)
-          return screen.orientation.lock('landscape').catch(function(){});
+          return screen.orientation.lock('landscape');
       }catch(e){}
-      return Promise.resolve();
+      return null;
     }
-    function isTouchDevice(){
-      return ('ontouchstart' in window)||(window.matchMedia&&window.matchMedia('(pointer: coarse)').matches);
+    var rotateNote=document.getElementById('fsRotateNote'),noteTimer=null;
+    function hideRotateNote(){rotateNote.style.display='none';if(noteTimer){clearTimeout(noteTimer);noteTimer=null;}}
+    function showRotateNote(){
+      rotateNote.style.display='block';
+      if(noteTimer) clearTimeout(noteTimer);
+      noteTimer=setTimeout(hideRotateNote,3600);
     }
     function syncOrientation(){
-      var need=fsActive&&isTouchDevice()&&window.innerHeight>window.innerWidth+10;
+      var need=fsActive&&window.innerWidth<=900&&window.innerHeight>window.innerWidth+10;
       card.classList.toggle('fs-rotated',need);
+      if(!need) hideRotateNote();
       setTimeout(function(){render();syncDateUI();},80);
+    }
+    function forceLandscape(){
+      if(!isFullscreen()) fullBtn.click();
+      var p=lockLandscape();
+      if(p&&p.then) p.then(hideRotateNote).catch(function(){
+        if(window.innerHeight>window.innerWidth) showRotateNote();
+      });
+      card.classList.toggle('fs-rotated',window.innerHeight>window.innerWidth+10);
+      setTimeout(function(){render();syncDateUI();},100);
+      setTimeout(function(){if(window.innerHeight>window.innerWidth) showRotateNote();},700);
     }
     function afterFullscreen(){
       syncFullscreenUi();
@@ -792,7 +807,7 @@
         afterFullscreen();
       } else {
         if(card.requestFullscreen){
-          card.requestFullscreen().then(function(){lockLandscape();}).catch(function(){
+          card.requestFullscreen().then(function(){var p=lockLandscape();if(p&&p.catch)p.catch(function(){});}).catch(function(){
             card.classList.add('chart-card-fs');afterFullscreen();
           });
         } else {
@@ -802,6 +817,8 @@
       }
     };
     document.getElementById('fsExitBtn').onclick=function(){fullBtn.click();};
+    document.getElementById('fsRotateBtn').onclick=forceLandscape;
+    document.getElementById('forceLandscapeBtn').onclick=forceLandscape;
     document.getElementById('fsSettingsBtn').onclick=function(){
       if(!isFullscreen()) return;
       var open=!card.classList.contains('fs-open');
